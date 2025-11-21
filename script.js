@@ -15,7 +15,9 @@ const translations = {
         status_connecting: "Connecting...",
         status_receiving: "Receiving file...",
         status_error: "Error or Invalid Code",
-        file_received: "File received"
+        status_error: "Error or Invalid Code",
+        file_received: "File received",
+        close_btn: "Close"
     },
     es: {
         tab_send: "Enviar",
@@ -32,7 +34,9 @@ const translations = {
         status_connecting: "Conectando...",
         status_receiving: "Recibiendo archivo...",
         status_error: "Error o Código Inválido",
-        file_received: "Archivo recibido"
+        status_error: "Error o Código Inválido",
+        file_received: "Archivo recibido",
+        close_btn: "Cerrar"
     }
 };
 
@@ -62,6 +66,15 @@ const els = {
     timerDisplay: document.getElementById('timer'),
     sendStatus: document.getElementById('send-status'),
     cancelSendBtn: document.getElementById('cancel-send-btn'),
+
+    // Sender Progress
+    senderProgressContainer: document.getElementById('sender-progress-container'),
+    senderFileName: document.getElementById('sender-file-name'),
+    senderFileSize: document.getElementById('sender-file-size'),
+    senderProgressFill: document.getElementById('sender-progress-fill'),
+    senderSpeed: document.getElementById('sender-speed'),
+    senderPercent: document.getElementById('sender-percent'),
+    senderCloseBtn: document.getElementById('sender-close-btn'),
 
     // Receive Mode
     receiveCodeInput: document.getElementById('receive-code-input'),
@@ -144,6 +157,15 @@ function initSender(file) {
     els.generatedCode.textContent = `${code.slice(0, 3)} ${code.slice(3)}`;
     els.sendStatus.textContent = translations[currentLang].status_waiting_receiver;
 
+    // Reset Sender Progress UI
+    els.senderProgressContainer.classList.add('hidden');
+    els.senderProgressFill.style.width = '0%';
+    els.senderPercent.textContent = '0%';
+    els.senderProgressFill.style.width = '0%';
+    els.senderPercent.textContent = '0%';
+    els.senderSpeed.textContent = '0 MB/s';
+    els.senderCloseBtn.classList.add('hidden');
+
     // QR Code
     els.qrContainer.innerHTML = '';
     const magicLink = `${window.location.origin}${window.location.pathname}?code=${code}`;
@@ -183,6 +205,13 @@ function initSender(file) {
 function sendFileChunked(file) {
     if (!conn) return;
 
+    // Show Progress UI
+    els.senderProgressContainer.classList.remove('hidden');
+    els.senderFileName.textContent = file.name;
+    els.senderFileSize.textContent = formatBytes(file.size);
+
+    const startTime = Date.now();
+
     // Send Metadata
     conn.send({
         type: 'meta',
@@ -201,13 +230,19 @@ function sendFileChunked(file) {
         });
 
         offset += e.target.result.byteLength;
+        updateSenderProgress(offset, file.size, startTime);
 
         if (offset < file.size) {
-            readNextChunk();
+            // Small delay to allow UI updates and prevent freezing
+            setTimeout(readNextChunk, 0);
         } else {
             els.sendStatus.textContent = translations[currentLang].status_sent;
             els.sendStatus.style.color = 'var(--success-color)';
-            setTimeout(() => resetSendState(), 3000);
+            els.sendStatus.textContent = translations[currentLang].status_sent;
+            els.sendStatus.style.color = 'var(--success-color)';
+            // Show Close Button
+            els.senderCloseBtn.classList.remove('hidden');
+            // setTimeout(() => resetSendState(), 3000); // Removed auto-reset
         }
     };
 
@@ -219,6 +254,16 @@ function sendFileChunked(file) {
     readNextChunk();
 }
 
+function updateSenderProgress(current, total, startTime) {
+    const percent = (current / total) * 100;
+    const elapsed = (Date.now() - startTime) / 1000; // seconds
+    const speed = elapsed > 0 ? current / elapsed : 0; // bytes/sec
+
+    els.senderProgressFill.style.width = `${percent}%`;
+    els.senderPercent.textContent = `${Math.round(percent)}%`;
+    els.senderSpeed.textContent = `${formatBytes(speed)}/s`;
+}
+
 function resetSendState() {
     if (peer) {
         peer.destroy();
@@ -228,6 +273,7 @@ function resetSendState() {
     els.stepCode.classList.add('hidden');
     els.stepUpload.classList.remove('hidden');
     els.sendStatus.style.color = 'var(--text-color)';
+    els.senderProgressContainer.classList.add('hidden'); // Hide progress bar
     fileToSend = null;
 }
 
@@ -246,16 +292,20 @@ els.dropZone.addEventListener('drop', (e) => {
     els.dropZone.classList.remove('dragover');
     if (e.dataTransfer.files.length > 0) initSender(e.dataTransfer.files[0]);
 });
-els.cancelSendBtn.addEventListener('click', resetSendState);
+if (els.cancelSendBtn) els.cancelSendBtn.addEventListener('click', resetSendState);
+if (els.senderCloseBtn) els.senderCloseBtn.addEventListener('click', resetSendState);
 
 // Copy Code
 els.copyCodeBtn.addEventListener('click', () => {
     const code = els.generatedCode.textContent.replace(/\s/g, '');
-    navigator.clipboard.writeText(code);
-
-    const originalIcon = els.copyCodeBtn.innerHTML;
-    els.copyCodeBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
-    setTimeout(() => els.copyCodeBtn.innerHTML = originalIcon, 2000);
+    navigator.clipboard.writeText(code).then(() => {
+        const originalIcon = '<i class="fa-regular fa-copy"></i>';
+        els.copyCodeBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+        setTimeout(() => els.copyCodeBtn.innerHTML = originalIcon, 2000);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+        alert('Clipboard access denied');
+    });
 });
 
 // --- RECEIVE FLOW ---
@@ -306,6 +356,10 @@ function initReceiver() {
 
                     els.receiveStatus.textContent = translations[currentLang].file_received;
                     conn.close();
+
+                    // Show Close Button on Item
+                    const closeBtn = uiItem.querySelector('.close-transfer-btn');
+                    if (closeBtn) closeBtn.classList.remove('hidden');
                 }
             }
         });
@@ -338,8 +392,15 @@ function createTransferItem(filename, size) {
                 <span class="transfer-speed">0 MB/s</span>
                 <span class="transfer-percent">0%</span>
             </div>
+            <button class="secondary-btn close-transfer-btn hidden" style="margin-top: 0.5rem; width: 100%;" data-i18n="close_btn">${translations[currentLang].close_btn}</button>
         </div>
     `;
+
+    const closeBtn = div.querySelector('.close-transfer-btn');
+    closeBtn.addEventListener('click', () => {
+        div.remove();
+    });
+
     els.transfersList.prepend(div);
     return div;
 }
