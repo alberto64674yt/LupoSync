@@ -230,7 +230,7 @@ function sendFileChunked(file) {
 
     let offset = 0;
     const reader = new FileReader();
-    const MAX_BUFFER = 64 * 1024; // 64KB buffer limit
+    const MAX_BUFFER = 64 * 1024 * 1024; // 64MB buffer limit (Max speed)
 
     reader.onload = (e) => {
         conn.send({
@@ -239,7 +239,10 @@ function sendFileChunked(file) {
         });
 
         offset += e.target.result.byteLength;
-        updateSenderProgress(offset, file.size, startTime);
+
+        // Calculate actual progress (bytes sent - bytes buffered)
+        const actualBytesSent = offset - conn.dataChannel.bufferedAmount;
+        updateSenderProgress(actualBytesSent, file.size, startTime);
 
         if (offset < file.size) {
             readNextChunk();
@@ -251,12 +254,23 @@ function sendFileChunked(file) {
 
     function readNextChunk() {
         if (conn.dataChannel.bufferedAmount > MAX_BUFFER) {
-            setTimeout(readNextChunk, 50); // Wait for buffer to drain
+            setTimeout(readNextChunk, 1); // Check back immediately
             return;
         }
         const slice = file.slice(offset, offset + CHUNK_SIZE);
         reader.readAsArrayBuffer(slice);
     }
+
+    // Periodic UI update to reflect draining buffer even when not reading
+    const progressInterval = setInterval(() => {
+        if (offset > 0 && offset <= file.size) {
+            const actualBytesSent = offset - conn.dataChannel.bufferedAmount;
+            updateSenderProgress(actualBytesSent, file.size, startTime);
+        }
+        if (offset >= file.size && conn.dataChannel.bufferedAmount === 0) {
+            clearInterval(progressInterval);
+        }
+    }, 100);
 
     readNextChunk();
 }
