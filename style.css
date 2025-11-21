@@ -417,3 +417,13 @@ header {
         font-size: 2.5rem;
     }
 }
+
+/* Footer */
+footer {
+    text-align: center;
+    margin-top: 2rem;
+    font-size: 0.85rem;
+    color: var(--text-color);
+    opacity: 0.6;
+    padding-bottom: 1rem;
+}
