@@ -199,6 +199,14 @@ function initSender(file) {
         conn.on('open', () => {
             sendFileChunked(file);
         });
+
+        conn.on('data', (data) => {
+            if (data.type === 'ack-complete') {
+                els.sendStatus.textContent = translations[currentLang].status_sent;
+                els.sendStatus.style.color = 'var(--success-color)';
+                els.senderCloseBtn.classList.remove('hidden');
+            }
+        });
     });
 }
 
@@ -222,6 +230,7 @@ function sendFileChunked(file) {
 
     let offset = 0;
     const reader = new FileReader();
+    const MAX_BUFFER = 64 * 1024; // 64KB buffer limit
 
     reader.onload = (e) => {
         conn.send({
@@ -233,20 +242,18 @@ function sendFileChunked(file) {
         updateSenderProgress(offset, file.size, startTime);
 
         if (offset < file.size) {
-            // Small delay to allow UI updates and prevent freezing
-            setTimeout(readNextChunk, 0);
+            readNextChunk();
         } else {
-            els.sendStatus.textContent = translations[currentLang].status_sent;
-            els.sendStatus.style.color = 'var(--success-color)';
-            els.sendStatus.textContent = translations[currentLang].status_sent;
-            els.sendStatus.style.color = 'var(--success-color)';
-            // Show Close Button
-            els.senderCloseBtn.classList.remove('hidden');
-            // setTimeout(() => resetSendState(), 3000); // Removed auto-reset
+            // Wait for ACK from receiver
+            els.sendStatus.textContent = "Verifying...";
         }
     };
 
     function readNextChunk() {
+        if (conn.dataChannel.bufferedAmount > MAX_BUFFER) {
+            setTimeout(readNextChunk, 50); // Wait for buffer to drain
+            return;
+        }
         const slice = file.slice(offset, offset + CHUNK_SIZE);
         reader.readAsArrayBuffer(slice);
     }
@@ -355,7 +362,8 @@ function initReceiver() {
                     a.click();
 
                     els.receiveStatus.textContent = translations[currentLang].file_received;
-                    conn.close();
+                    conn.send({ type: 'ack-complete' });
+                    // conn.close(); // Keep open so sender gets the ACK
 
                     // Show Close Button on Item
                     const closeBtn = uiItem.querySelector('.close-transfer-btn');
