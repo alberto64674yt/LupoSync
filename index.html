@@ -69,10 +69,31 @@
                         <i class="fa-regular fa-clock"></i>
                         <span id="timer">10:00</span>
                     </div>
+                    <button id="cancel-send-btn" class="secondary-btn" style="margin-top: 1rem; width: 100%;"
+                        data-i18n="cancel_btn">Cancel</button>
 
                     <p id="send-status" class="status-text" data-i18n="status_waiting_receiver">Waiting for receiver...
                     </p>
-                    <button id="cancel-send-btn" class="glass-btn" data-i18n="cancel_btn">Cancel</button>
+
+                    <!-- Sender Progress Bar -->
+                    <div id="sender-progress-container" class="transfer-item hidden"
+                        style="margin-top: 1rem; text-align: left;">
+                        <div class="transfer-info">
+                            <div class="file-header">
+                                <div class="file-name" id="sender-file-name">File Name</div>
+                                <div class="file-size" id="sender-file-size">0 MB</div>
+                            </div>
+                            <div class="progress-bar">
+                                <div id="sender-progress-fill" class="progress-fill" style="width: 0%"></div>
+                            </div>
+                            <div class="transfer-details">
+                                <span id="sender-speed" class="transfer-speed">0 MB/s</span>
+                                <span id="sender-percent" class="transfer-percent">0%</span>
+                            </div>
+                            <button id="sender-close-btn" class="secondary-btn hidden"
+                                style="margin-top: 0.5rem; width: 100%;" data-i18n="close_btn">Close</button>
+                        </div>
+                    </div>
                 </div>
             </section>
 
