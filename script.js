@@ -205,10 +205,15 @@ function initSender(file) {
                 els.sendStatus.textContent = translations[currentLang].status_sent;
                 els.sendStatus.style.color = 'var(--success-color)';
                 els.senderCloseBtn.classList.remove('hidden');
+                // Ensure 100% is shown at the end
+                updateSenderProgress(file.size, file.size, startTime);
+            } else if (data.type === 'ack-progress') {
+                updateSenderProgress(data.received, file.size, startTime);
             }
         });
     });
 }
+let startTime = 0; // Global scope for sender start time
 
 function sendFileChunked(file) {
     if (!conn) return;
@@ -218,7 +223,7 @@ function sendFileChunked(file) {
     els.senderFileName.textContent = file.name;
     els.senderFileSize.textContent = formatBytes(file.size);
 
-    const startTime = Date.now();
+    startTime = Date.now(); // Use global startTime
 
     // Send Metadata
     conn.send({
@@ -240,10 +245,6 @@ function sendFileChunked(file) {
 
         offset += e.target.result.byteLength;
 
-        // Calculate actual progress (bytes sent - bytes buffered)
-        const actualBytesSent = offset - conn.dataChannel.bufferedAmount;
-        updateSenderProgress(actualBytesSent, file.size, startTime);
-
         if (offset < file.size) {
             readNextChunk();
         } else {
@@ -260,17 +261,6 @@ function sendFileChunked(file) {
         const slice = file.slice(offset, offset + CHUNK_SIZE);
         reader.readAsArrayBuffer(slice);
     }
-
-    // Periodic UI update to reflect draining buffer even when not reading
-    const progressInterval = setInterval(() => {
-        if (offset > 0 && offset <= file.size) {
-            const actualBytesSent = offset - conn.dataChannel.bufferedAmount;
-            updateSenderProgress(actualBytesSent, file.size, startTime);
-        }
-        if (offset >= file.size && conn.dataChannel.bufferedAmount === 0) {
-            clearInterval(progressInterval);
-        }
-    }, 100);
 
     readNextChunk();
 }
@@ -353,6 +343,7 @@ function initReceiver() {
         let fileType = '';
         let startTime = 0;
         let uiItem = null;
+        let lastAckTime = 0;
 
         conn.on('data', (data) => {
             if (data.type === 'meta') {
@@ -361,11 +352,19 @@ function initReceiver() {
                 fileType = data.fileType;
                 startTime = Date.now();
                 uiItem = createTransferItem(fileName, totalSize);
+                lastAckTime = 0;
             } else if (data.type === 'chunk') {
                 receivedChunks.push(data.data);
                 receivedSize += data.data.byteLength;
 
                 updateTransferProgress(uiItem, receivedSize, totalSize, startTime);
+
+                // Send Progress ACK to Sender (Throttle to every 200ms)
+                const now = Date.now();
+                if (now - lastAckTime > 200) {
+                    conn.send({ type: 'ack-progress', received: receivedSize });
+                    lastAckTime = now;
+                }
 
                 if (receivedSize === totalSize) {
                     const blob = new Blob(receivedChunks, { type: fileType });
