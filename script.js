@@ -8,16 +8,20 @@ const translations = {
         share_code_msg: "Share this code with the recipient",
         status_waiting_receiver: "Waiting for receiver...",
         status_sending: "Sending file...",
-        status_sent: "File sent successfully!",
+        status_sent: "All files sent successfully!",
+        status_received_batch: "All files received successfully!",
         cancel_btn: "Cancel",
         enter_code_title: "Enter 6-digit Key",
         receive_btn: "Receive",
         status_connecting: "Connecting...",
-        status_receiving: "Receiving file...",
-        status_error: "Error or Invalid Code",
+        status_receiving: "Receiving files...",
         status_error: "Error or Invalid Code",
         file_received: "File received",
-        close_btn: "Close"
+        close_btn: "Close",
+        history_title: "Transfer History",
+        no_history: "No transfers yet.",
+        clear_history: "Clear History",
+        confirm_leave: "Transfer in progress. Are you sure you want to leave?"
     },
     es: {
         tab_send: "Enviar",
@@ -27,16 +31,20 @@ const translations = {
         share_code_msg: "Comparte este código con el destinatario",
         status_waiting_receiver: "Esperando al receptor...",
         status_sending: "Enviando archivo...",
-        status_sent: "¡Archivo enviado!",
+        status_sent: "¡Todos los archivos enviados!",
+        status_received_batch: "¡Todos los archivos recibidos!",
         cancel_btn: "Cancelar",
         enter_code_title: "Introduce Clave de 6 dígitos",
         receive_btn: "Recibir",
         status_connecting: "Conectando...",
-        status_receiving: "Recibiendo archivo...",
-        status_error: "Error o Código Inválido",
+        status_receiving: "Recibiendo archivos...",
         status_error: "Error o Código Inválido",
         file_received: "Archivo recibido",
-        close_btn: "Cerrar"
+        close_btn: "Cerrar",
+        history_title: "Historial de Transferencias",
+        no_history: "No hay transferencias.",
+        clear_history: "Borrar Historial",
+        confirm_leave: "Transferencia en curso. ¿Seguro que quieres salir?"
     }
 };
 
@@ -44,9 +52,15 @@ const translations = {
 let currentLang = 'en';
 let peer = null;
 let conn = null;
-let fileToSend = null;
+let filesQueue = [];
+let currentFileIdx = 0;
 let timerInterval = null;
-const CHUNK_SIZE = 16384; // 16KB chunks
+let wakeLock = null;
+let transferActive = false;
+
+// Config
+const CHUNK_SIZE = 64 * 1024; // 64KB chunks
+const MAX_BUFFER = 16 * 1024 * 1024; // 16MB buffer limit
 
 // DOM Elements
 const els = {
@@ -80,7 +94,14 @@ const els = {
     receiveCodeInput: document.getElementById('receive-code-input'),
     receiveBtn: document.getElementById('receive-btn'),
     receiveStatus: document.getElementById('receive-status'),
-    transfersList: document.getElementById('transfers-list')
+    transfersList: document.getElementById('transfers-list'),
+
+    // History
+    historyPanel: document.getElementById('history-panel'),
+    historyList: document.getElementById('history-list'),
+    historyToggle: document.getElementById('history-toggle'),
+    closeHistory: document.getElementById('close-history'),
+    clearHistory: document.getElementById('clear-history')
 };
 
 // --- Language System ---
@@ -90,6 +111,7 @@ function updateLanguage(lang) {
         const key = el.getAttribute('data-i18n');
         if (translations[lang][key]) el.textContent = translations[lang][key];
     });
+    renderHistory();
 }
 
 els.langToggle.addEventListener('click', () => {
@@ -107,11 +129,133 @@ els.tabBtns.forEach(btn => {
         if (tab === 'send') {
             els.sendPanel.classList.remove('hidden');
             els.receivePanel.classList.add('hidden');
+            els.historyPanel.classList.add('hidden');
         } else {
             els.sendPanel.classList.add('hidden');
             els.receivePanel.classList.remove('hidden');
+            els.historyPanel.classList.add('hidden');
         }
     });
+});
+
+// --- Wake Lock API ---
+async function requestWakeLock() {
+    if ('wakeLock' in navigator) {
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+        } catch (err) {
+            console.error(err);
+        }
+    }
+}
+
+function releaseWakeLock() {
+    if (wakeLock) {
+        wakeLock.release();
+        wakeLock = null;
+    }
+}
+
+// --- Vibration API ---
+function vibrateSuccess() {
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+}
+
+function vibrateError() {
+    if (navigator.vibrate) navigator.vibrate([300]);
+}
+
+// --- Dynamic Title ---
+function updateTitle(percent) {
+    if (percent === null) {
+        document.title = "LupoSync";
+    } else if (percent === 100) {
+        document.title = "✅ LupoSync";
+    } else {
+        document.title = `(${Math.round(percent)}%) LupoSync`;
+    }
+}
+
+// --- Before Unload Protection ---
+window.addEventListener('beforeunload', (e) => {
+    if (transferActive) {
+        e.preventDefault();
+        e.returnValue = translations[currentLang].confirm_leave;
+        return translations[currentLang].confirm_leave;
+    }
+});
+
+// --- History System ---
+function getHistory() {
+    return JSON.parse(localStorage.getItem('luposync_history') || '[]');
+}
+
+function addToHistory(role, fileName, size) {
+    const history = getHistory();
+    history.unshift({
+        role,
+        fileName,
+        size,
+        date: new Date().toISOString()
+    });
+    if (history.length > 50) history.pop();
+    localStorage.setItem('luposync_history', JSON.stringify(history));
+    renderHistory();
+}
+
+function renderHistory() {
+    const history = getHistory();
+    els.historyList.innerHTML = '';
+
+    if (history.length === 0) {
+        els.historyList.innerHTML = `<p class="status-text" data-i18n="no_history">${translations[currentLang].no_history}</p>`;
+        return;
+    }
+
+    history.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        const icon = item.role === 'sent' ? '<i class="fa-solid fa-arrow-up"></i>' : '<i class="fa-solid fa-arrow-down"></i>';
+        const date = new Date(item.date).toLocaleDateString() + ' ' + new Date(item.date).toLocaleTimeString();
+
+        div.innerHTML = `
+            <div style="display:flex; align-items:center; gap:1rem;">
+                ${icon}
+                <div class="history-info">
+                    <span class="history-name">${item.fileName}</span>
+                    <span class="history-meta">${formatBytes(item.size)} • ${date}</span>
+                </div>
+            </div>
+        `;
+        els.historyList.appendChild(div);
+    });
+}
+
+els.historyToggle.addEventListener('click', () => {
+    els.historyPanel.classList.toggle('hidden');
+    if (!els.historyPanel.classList.contains('hidden')) {
+        renderHistory();
+        if (window.innerWidth < 600) {
+            els.sendPanel.classList.add('hidden');
+            els.receivePanel.classList.add('hidden');
+        }
+    } else {
+        const activeTab = document.querySelector('.tab-btn.active').dataset.tab;
+        if (activeTab === 'send') els.sendPanel.classList.remove('hidden');
+        else els.receivePanel.classList.remove('hidden');
+    }
+});
+
+els.closeHistory.addEventListener('click', () => {
+    els.historyPanel.classList.add('hidden');
+    const activeTab = document.querySelector('.tab-btn.active').dataset.tab;
+    if (activeTab === 'send') els.sendPanel.classList.remove('hidden');
+    else els.receivePanel.classList.remove('hidden');
+});
+
+els.clearHistory.addEventListener('click', () => {
+    localStorage.removeItem('luposync_history');
+    renderHistory();
 });
 
 // --- Utility Functions ---
@@ -130,7 +274,7 @@ function generateCode() {
 }
 
 function startTimer() {
-    let timeLeft = 600; // 10 minutes
+    let timeLeft = 600;
     clearInterval(timerInterval);
 
     timerInterval = setInterval(() => {
@@ -147,26 +291,22 @@ function startTimer() {
     }, 1000);
 }
 
-function initSender(file) {
-    fileToSend = file;
+function initSender(files) {
+    filesQueue = Array.from(files);
+    currentFileIdx = 0;
     const code = generateCode();
 
-    // UI Update
     els.stepUpload.classList.add('hidden');
     els.stepCode.classList.remove('hidden');
     els.generatedCode.textContent = `${code.slice(0, 3)} ${code.slice(3)}`;
     els.sendStatus.textContent = translations[currentLang].status_waiting_receiver;
 
-    // Reset Sender Progress UI
     els.senderProgressContainer.classList.add('hidden');
-    els.senderProgressFill.style.width = '0%';
-    els.senderPercent.textContent = '0%';
     els.senderProgressFill.style.width = '0%';
     els.senderPercent.textContent = '0%';
     els.senderSpeed.textContent = '0 MB/s';
     els.senderCloseBtn.classList.add('hidden');
 
-    // QR Code
     els.qrContainer.innerHTML = '';
     const magicLink = `${window.location.origin}${window.location.pathname}?code=${code}`;
     new QRCode(els.qrContainer, {
@@ -180,14 +320,20 @@ function initSender(file) {
 
     startTimer();
 
-    // PeerJS Init
     if (peer) peer.destroy();
-    peer = new Peer(`pf-${code}`);
+    peer = new Peer(`pf-${code}`, {
+        config: {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:global.stun.twilio.com:3478' }
+            ]
+        }
+    });
 
     peer.on('error', (err) => {
         console.error(err);
         if (err.type === 'unavailable-id') {
-            initSender(file);
+            initSender(files);
         }
     });
 
@@ -195,47 +341,73 @@ function initSender(file) {
         conn = connection;
         els.sendStatus.textContent = translations[currentLang].status_sending;
         clearInterval(timerInterval);
+        transferActive = true;
+        requestWakeLock();
 
         conn.on('open', () => {
-            sendFileChunked(file);
+            conn.send({
+                type: 'batch-meta',
+                count: filesQueue.length,
+                totalSize: filesQueue.reduce((acc, f) => acc + f.size, 0)
+            });
+            sendNextFile();
         });
 
         conn.on('data', (data) => {
-            if (data.type === 'ack-complete') {
-                els.sendStatus.textContent = translations[currentLang].status_sent;
-                els.sendStatus.style.color = 'var(--success-color)';
-                els.senderCloseBtn.classList.remove('hidden');
-                // Ensure 100% is shown at the end
-                updateSenderProgress(file.size, file.size, startTime);
+            if (data.type === 'ack-file') {
+                addToHistory('sent', filesQueue[currentFileIdx].name, filesQueue[currentFileIdx].size);
+                currentFileIdx++;
+                if (currentFileIdx < filesQueue.length) {
+                    sendNextFile();
+                } else {
+                    els.sendStatus.setAttribute('data-i18n', 'status_sent');
+                    els.sendStatus.textContent = translations[currentLang].status_sent;
+                    els.sendStatus.style.color = 'var(--success-color)';
+                    els.senderCloseBtn.classList.remove('hidden');
+                    transferActive = false;
+                    releaseWakeLock();
+                    vibrateSuccess();
+                    updateTitle(100);
+                    conn.send({ type: 'batch-complete' });
+                }
             } else if (data.type === 'ack-progress') {
-                updateSenderProgress(data.received, file.size, startTime);
+                updateSenderProgress(data.received, filesQueue[currentFileIdx].size, startTime);
             }
+        });
+
+        conn.on('close', () => {
+            transferActive = false;
+            releaseWakeLock();
+            updateTitle(null);
         });
     });
 }
-let startTime = 0; // Global scope for sender start time
 
-function sendFileChunked(file) {
-    if (!conn) return;
+let startTime = 0;
 
-    // Show Progress UI
+function sendNextFile() {
+    if (!conn || currentFileIdx >= filesQueue.length) return;
+
+    const file = filesQueue[currentFileIdx];
+
     els.senderProgressContainer.classList.remove('hidden');
-    els.senderFileName.textContent = file.name;
+    els.senderFileName.textContent = `${file.name} (${currentFileIdx + 1}/${filesQueue.length})`;
     els.senderFileSize.textContent = formatBytes(file.size);
+    els.senderProgressFill.style.width = '0%';
+    els.senderPercent.textContent = '0%';
 
-    startTime = Date.now(); // Use global startTime
+    startTime = Date.now();
 
-    // Send Metadata
     conn.send({
         type: 'meta',
         name: file.name,
         size: file.size,
-        fileType: file.type
+        fileType: file.type,
+        index: currentFileIdx
     });
 
     let offset = 0;
     const reader = new FileReader();
-    const MAX_BUFFER = 64 * 1024 * 1024; // 64MB buffer limit (Max speed)
 
     reader.onload = (e) => {
         conn.send({
@@ -248,14 +420,13 @@ function sendFileChunked(file) {
         if (offset < file.size) {
             readNextChunk();
         } else {
-            // Wait for ACK from receiver
-            els.sendStatus.textContent = "Verifying...";
+            els.sendStatus.textContent = `Verifying ${file.name}...`;
         }
     };
 
     function readNextChunk() {
         if (conn.dataChannel.bufferedAmount > MAX_BUFFER) {
-            setTimeout(readNextChunk, 1); // Check back immediately
+            setTimeout(readNextChunk, 10);
             return;
         }
         const slice = file.slice(offset, offset + CHUNK_SIZE);
@@ -267,12 +438,13 @@ function sendFileChunked(file) {
 
 function updateSenderProgress(current, total, startTime) {
     const percent = (current / total) * 100;
-    const elapsed = (Date.now() - startTime) / 1000; // seconds
-    const speed = elapsed > 0 ? current / elapsed : 0; // bytes/sec
+    const elapsed = (Date.now() - startTime) / 1000;
+    const speed = elapsed > 0 ? current / elapsed : 0;
 
     els.senderProgressFill.style.width = `${percent}%`;
     els.senderPercent.textContent = `${Math.round(percent)}%`;
     els.senderSpeed.textContent = `${formatBytes(speed)}/s`;
+    updateTitle(percent);
 }
 
 function resetSendState() {
@@ -284,14 +456,15 @@ function resetSendState() {
     els.stepCode.classList.add('hidden');
     els.stepUpload.classList.remove('hidden');
     els.sendStatus.style.color = 'var(--text-color)';
-    els.senderProgressContainer.classList.add('hidden'); // Hide progress bar
-    fileToSend = null;
+    els.senderProgressContainer.classList.add('hidden');
+    filesQueue = [];
+    transferActive = false;
+    releaseWakeLock();
+    updateTitle(null);
 }
 
-// Send Events
-// Note: Click is handled by <label> tag automatically
 els.fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) initSender(e.target.files[0]);
+    if (e.target.files.length > 0) initSender(e.target.files);
 });
 els.dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -301,12 +474,11 @@ els.dropZone.addEventListener('dragleave', () => els.dropZone.classList.remove('
 els.dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     els.dropZone.classList.remove('dragover');
-    if (e.dataTransfer.files.length > 0) initSender(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files.length > 0) initSender(e.dataTransfer.files);
 });
 if (els.cancelSendBtn) els.cancelSendBtn.addEventListener('click', resetSendState);
 if (els.senderCloseBtn) els.senderCloseBtn.addEventListener('click', resetSendState);
 
-// Copy Code
 els.copyCodeBtn.addEventListener('click', () => {
     const code = els.generatedCode.textContent.replace(/\s/g, '');
     navigator.clipboard.writeText(code).then(() => {
@@ -324,15 +496,26 @@ function initReceiver() {
     const code = els.receiveCodeInput.value.replace(/\s/g, '');
     if (code.length !== 6) return;
 
+    els.receiveStatus.setAttribute('data-i18n', 'status_connecting');
     els.receiveStatus.textContent = translations[currentLang].status_connecting;
 
     if (peer) peer.destroy();
-    peer = new Peer();
+    peer = new Peer({
+        config: {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:global.stun.twilio.com:3478' }
+            ]
+        }
+    });
 
     peer.on('open', () => {
         const conn = peer.connect(`pf-${code}`);
+        transferActive = true;
+        requestWakeLock();
 
         conn.on('open', () => {
+            els.receiveStatus.setAttribute('data-i18n', 'status_receiving');
             els.receiveStatus.textContent = translations[currentLang].status_receiving;
         });
 
@@ -344,22 +527,54 @@ function initReceiver() {
         let startTime = 0;
         let uiItem = null;
         let lastAckTime = 0;
+        let batchTotal = 0;
+        let batchCount = 0;
+        let fileStream = null;
+        let writable = null;
 
-        conn.on('data', (data) => {
-            if (data.type === 'meta') {
+        conn.on('data', async (data) => {
+            if (data.type === 'batch-meta') {
+                batchTotal = data.count;
+                batchCount = 0;
+                els.receiveStatus.textContent = `Receiving ${batchTotal} files...`;
+            }
+            else if (data.type === 'meta') {
                 fileName = data.name;
                 totalSize = data.size;
                 fileType = data.fileType;
+                receivedChunks = [];
+                receivedSize = 0;
                 startTime = Date.now();
-                uiItem = createTransferItem(fileName, totalSize);
+                batchCount = data.index + 1;
+
+                uiItem = createTransferItem(`${fileName} (${batchCount}/${batchTotal})`, totalSize);
                 lastAckTime = 0;
-            } else if (data.type === 'chunk') {
-                receivedChunks.push(data.data);
+
+                // Try File System Access API (Streams)
+                if (window.showSaveFilePicker) {
+                    try {
+                        const handle = await window.showSaveFilePicker({
+                            suggestedName: fileName
+                        });
+                        writable = await handle.createWritable();
+                        fileStream = true;
+                    } catch (err) {
+                        console.log("Stream cancelled or failed, falling back to RAM");
+                        fileStream = false;
+                    }
+                }
+            }
+            else if (data.type === 'chunk') {
                 receivedSize += data.data.byteLength;
+
+                if (fileStream && writable) {
+                    await writable.write(data.data);
+                } else {
+                    receivedChunks.push(data.data);
+                }
 
                 updateTransferProgress(uiItem, receivedSize, totalSize, startTime);
 
-                // Send Progress ACK to Sender (Throttle to every 200ms)
                 const now = Date.now();
                 if (now - lastAckTime > 200) {
                     conn.send({ type: 'ack-progress', received: receivedSize });
@@ -367,26 +582,57 @@ function initReceiver() {
                 }
 
                 if (receivedSize === totalSize) {
-                    const blob = new Blob(receivedChunks, { type: fileType });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = fileName;
-                    a.click();
+                    if (fileStream && writable) {
+                        await writable.close();
+                        writable = null;
+                        fileStream = null;
+                    } else {
+                        // RAM Fallback (Blob)
+                        // iOS Fix: Force application/octet-stream
+                        const type = /iPhone|iPad|iPod/.test(navigator.userAgent) ? 'application/octet-stream' : fileType;
+                        const blob = new Blob(receivedChunks, { type: type });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fileName;
+                        a.click();
+                    }
 
-                    els.receiveStatus.textContent = translations[currentLang].file_received;
-                    conn.send({ type: 'ack-complete' });
-                    // conn.close(); // Keep open so sender gets the ACK
+                    uiItem.querySelector('.progress-fill').style.backgroundColor = 'var(--success-color)';
+                    uiItem.querySelector('.transfer-details').innerHTML = '<span style="color:var(--success-color)">Completed</span>';
 
-                    // Show Close Button on Item
+                    addToHistory('received', fileName, totalSize);
+                    vibrateSuccess();
+                    updateTitle(100);
+
+                    conn.send({ type: 'ack-file' });
+
                     const closeBtn = uiItem.querySelector('.close-transfer-btn');
                     if (closeBtn) closeBtn.classList.remove('hidden');
                 }
             }
+            else if (data.type === 'batch-complete') {
+                els.receiveStatus.setAttribute('data-i18n', 'status_received_batch');
+                els.receiveStatus.textContent = translations[currentLang].status_received_batch;
+                transferActive = false;
+                releaseWakeLock();
+                updateTitle(null);
+            }
         });
 
         conn.on('error', (err) => {
+            els.receiveStatus.setAttribute('data-i18n', 'status_error');
             els.receiveStatus.textContent = translations[currentLang].status_error;
+            transferActive = false;
+            releaseWakeLock();
+            vibrateError();
+            updateTitle(null);
+        });
+
+        conn.on('close', () => {
+            transferActive = false;
+            releaseWakeLock();
+            updateTitle(null);
         });
 
         setTimeout(() => {
@@ -428,38 +674,36 @@ function createTransferItem(filename, size) {
 
 function updateTransferProgress(item, current, total, startTime) {
     const percent = (current / total) * 100;
-    const elapsed = (Date.now() - startTime) / 1000; // seconds
-    const speed = elapsed > 0 ? current / elapsed : 0; // bytes/sec
+    const elapsed = (Date.now() - startTime) / 1000;
+    const speed = elapsed > 0 ? current / elapsed : 0;
 
     item.querySelector('.progress-fill').style.width = `${percent}%`;
     item.querySelector('.transfer-percent').textContent = `${Math.round(percent)}%`;
     item.querySelector('.transfer-speed').textContent = `${formatBytes(speed)}/s`;
+    updateTitle(percent);
 }
 
-// Input Handling (Strip spaces)
 els.receiveCodeInput.addEventListener('input', (e) => {
     e.target.value = e.target.value.replace(/[^0-9]/g, '');
 });
 
 els.receiveBtn.addEventListener('click', initReceiver);
 
-// Init
 updateLanguage('en');
+renderHistory();
 
-// Magic Link Logic
 const urlParams = new URLSearchParams(window.location.search);
 const magicCode = urlParams.get('code');
 
 if (magicCode) {
-    // Switch to Receive Tab
     els.tabBtns.forEach(b => b.classList.remove('active'));
     document.querySelector('[data-tab="receive"]').classList.add('active');
     els.sendPanel.classList.add('hidden');
     els.receivePanel.classList.remove('hidden');
-
-    // Fill Input
     els.receiveCodeInput.value = magicCode;
 
-    // Optional: Auto-focus or Auto-receive could go here
-    // For now, just filling it is safer/better UX so user confirms
+    // Auto-connect
+    setTimeout(() => {
+        initReceiver();
+    }, 500);
 }
