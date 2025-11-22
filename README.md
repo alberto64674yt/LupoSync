@@ -26,7 +26,7 @@
 * **Cross-Platform & Mobile Ready:** Works on iOS, Android, Windows, Mac, and Linux.
     * Includes **Wake Lock API** to keep the device awake during transfers.
     * **Vibration API** feedback on completion or error.
-* **PWA (Progressive Web App):** Installable as a native app on mobile and desktop. Works offline.
+* **PWA (Progressive Web App):** Installable as a native app. Instant load (network required for pairing).
 * **User Experience:**
     * Glassmorphism UI design.
     * QR Code & Magic Links for instant connection.
@@ -75,7 +75,7 @@ Feel free to fork this project! It's designed to be a clean example of how to bu
 * **Multiplataforma y Móvil:** Funciona en iOS, Android, Windows, Mac y Linux.
     * Incluye **Wake Lock API** para evitar que la pantalla se apague durante el envío.
     * **Vibración** táctil al completar o fallar transferencias.
-* **PWA (Progressive Web App):** Se puede instalar como una app nativa en tu móvil u ordenador. Funciona offline.
+* **PWA (Progressive Web App):** Se puede instalar como una app nativa. Carga inmediata (requiere red para emparejar).
 * **Experiencia de Usuario:**
     * Diseño Glassmorphism.
     * Códigos QR y "Magic Links" para conexión instantánea.
