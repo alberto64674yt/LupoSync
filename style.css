@@ -437,6 +437,201 @@ footer {
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
+    color: var(--text-color);
+    margin-bottom: 1rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.timer-container.expired {
+    color: #ef4444;
+}
+
+/* Receive Mode Styles */
+.receive-container {
+    text-align: center;
+    padding: 1rem 0;
+}
+
+.big-input {
+    font-size: 2rem;
+    text-align: center;
+    letter-spacing: 4px;
+    padding: 1rem;
+    margin: 1.5rem 0;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid var(--glass-border);
+    border-radius: 16px;
+    color: white;
+    width: 100%;
+    transition: border-color 0.3s;
+}
+
+.big-input:focus {
+    border-color: var(--accent-color);
+    outline: none;
+}
+
+/* Transfers List */
+.transfers-list {
+    margin-top: 1.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.transfer-item {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.8rem;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    transition: width 0.2s;
+}
+
+.transfer-info {
+    flex: 1;
+    overflow: hidden;
+}
+
+.file-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.2rem;
+}
+
+.file-name {
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+}
+
+.transfer-details {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.6);
+    display: flex;
+    justify-content: space-between;
+}
+
+.progress-bar {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    margin-top: 0.4rem;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--success-color);
+    width: 0%;
+    transition: width 0.4s linear;
+}
+
+/* Utility */
+.hidden {
+    display: none !important;
+}
+
+.status-text {
+    text-align: center;
+    font-size: 0.9rem;
+    opacity: 0.7;
+    margin-top: 1rem;
+}
+
+.code-wrapper {
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.big-code {
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: 4px;
+    color: var(--primary-color);
+    margin-bottom: 0.5rem;
+}
+
+.icon-btn {
+    background: none;
+    border: none;
+    color: var(--text-color);
+    font-size: 1.2rem;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.icon-btn:hover {
+    opacity: 1;
+}
+
+.qr-container {
+    display: flex;
+    justify-content: center;
+    margin: 1.5rem 0;
+    padding: 1rem;
+    background: white;
+    border-radius: 12px;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+    .app-container {
+        width: 95%;
+        padding: 1rem;
+    }
+
+    .glass-panel {
+        padding: 1.5rem;
+    }
+
+    .logo {
+        font-size: 1.3rem;
+    }
+
+    .logo img {
+        height: 32px;
+        width: 32px;
+    }
+
+    .big-code {
+        font-size: 2rem;
+        letter-spacing: 2px;
+    }
+
+    .drop-zone {
+        padding: 2rem 1rem;
+    }
+
+    .drop-zone i {
+        font-size: 2.5rem;
+    }
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    margin-top: 2rem;
+    font-size: 0.85rem;
+    color: var(--text-color);
+    opacity: 0.6;
+    padding-bottom: 1rem;
+}
+
+.secondary-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-color);
+    border: 1px solid var(--glass-border);
+    padding: 0.8rem 1.5rem;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
     transition: all 0.3s;
     width: 100%;
     margin-top: 1rem;
@@ -446,4 +641,49 @@ footer {
     background: rgba(255, 255, 255, 0.2);
     border-color: rgba(255, 255, 255, 0.3);
     transform: translateY(-2px);
+}
+
+/* Header Controls */
+.header-controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* History Panel */
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.history-header h2 {
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+.history-item {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.8rem;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.history-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.history-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.history-meta {
+    font-size: 0.75rem;
+    opacity: 0.7;
 }
