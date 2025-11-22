@@ -17,6 +17,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(() => console.log('Service Worker Registered'))
+                .catch(err => console.log('SW Registration Failed', err));
+        }
+    </script>
 </head>
 
 <body>
@@ -31,7 +39,12 @@
             <div class="logo">
                 <img src="assets/logo.png" alt="LupoSync Logo"> LupoSync
             </div>
-            <button id="lang-toggle" class="glass-btn">ES / EN</button>
+            <div class="header-controls">
+                <button id="history-toggle" class="glass-btn" title="History" aria-label="History">
+                    <i class="fa-solid fa-clock"></i>
+                </button>
+                <button id="lang-toggle" class="glass-btn">ES / EN</button>
+            </div>
         </header>
 
         <main>
@@ -49,7 +62,7 @@
                         <i class="fa-solid fa-cloud-arrow-up"></i>
                         <h3 data-i18n="drop_zone_title">Drag & Drop files here</h3>
                         <p data-i18n="drop_zone_subtitle">or click to browse</p>
-                        <input type="file" id="file-input" hidden>
+                        <input type="file" id="file-input" hidden multiple>
                     </label>
                 </div>
 
@@ -108,6 +121,19 @@
 
                 <!-- Transfer Progress (Shared) -->
                 <div id="transfers-list" class="transfers-list"></div>
+            </section>
+
+            <!-- HISTORY PANEL -->
+            <section id="history-panel" class="glass-panel hidden">
+                <div class="history-header">
+                    <h2 data-i18n="history_title">Transfer History</h2>
+                    <button id="close-history" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div id="history-list" class="transfers-list">
+                    <!-- History items will go here -->
+                    <p class="status-text" data-i18n="no_history">No transfers yet.</p>
+                </div>
+                <button id="clear-history" class="secondary-btn" data-i18n="clear_history">Clear History</button>
             </section>
         </main>
 
