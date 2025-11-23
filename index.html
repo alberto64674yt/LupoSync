@@ -23,15 +23,11 @@
 
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="assets/logo.png">
-    <!-- Google Fonts: Inter for a clean, modern look -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <!-- PeerJS CDN -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <!-- QRCode.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="manifest" href="manifest.json">
     <script>
@@ -64,15 +60,12 @@
         </header>
 
         <main>
-            <!-- Tab Switcher -->
             <div class="tab-switcher">
                 <button class="tab-btn active" data-tab="send" data-i18n="tab_send">Send</button>
                 <button class="tab-btn" data-tab="receive" data-i18n="tab_receive">Receive</button>
             </div>
 
-            <!-- SEND MODE -->
             <section id="send-panel" class="glass-panel">
-                <!-- Step 1: Drop File -->
                 <div id="step-upload" class="step-container">
                     <label id="drop-zone" class="drop-zone" for="file-input">
                         <i class="fa-solid fa-cloud-arrow-up"></i>
@@ -82,7 +75,6 @@
                     </label>
                 </div>
 
-                <!-- Step 2: Code & Wait -->
                 <div id="step-code" class="step-container hidden">
                     <div class="code-wrapper">
                         <h1 id="generated-code" class="big-code">--- ---</h1>
@@ -91,6 +83,8 @@
                         </button>
                         <p data-i18n="share_code_msg">Share this code with the recipient</p>
                     </div>
+                    
+                    <button id="copy-link-btn" class="secondary-btn" style="margin-bottom: 1rem; width: 100%;" data-i18n="copy_link_btn">Copy Magic Link</button>
 
                     <div id="qrcode" class="qr-container"></div>
 
@@ -104,7 +98,6 @@
                     <p id="send-status" class="status-text" data-i18n="status_waiting_receiver">Waiting for receiver...
                     </p>
 
-                    <!-- Sender Progress Bar -->
                     <div id="sender-progress-container" class="transfer-item hidden"
                         style="margin-top: 1rem; text-align: left;">
                         <div class="transfer-info">
@@ -126,7 +119,6 @@
                 </div>
             </section>
 
-            <!-- RECEIVE MODE -->
             <section id="receive-panel" class="glass-panel hidden">
                 <div class="receive-container">
                     <h2 data-i18n="enter_code_title">Enter 6-digit Key</h2>
@@ -135,18 +127,15 @@
                     <p id="receive-status" class="status-text"></p>
                 </div>
 
-                <!-- Transfer Progress (Shared) -->
                 <div id="transfers-list" class="transfers-list"></div>
             </section>
 
-            <!-- HISTORY PANEL -->
             <section id="history-panel" class="glass-panel hidden">
                 <div class="history-header">
                     <h2 data-i18n="history_title">Transfer History</h2>
                     <button id="close-history" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 <div id="history-list" class="transfers-list">
-                    <!-- History items will go here -->
                     <p class="status-text" data-i18n="no_history">No transfers yet.</p>
                 </div>
                 <button id="clear-history" class="secondary-btn" data-i18n="clear_history">Clear History</button>
@@ -162,6 +151,3 @@
 </body>
 
 </html>
-
-
-
