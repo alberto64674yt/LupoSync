@@ -21,7 +21,8 @@ const translations = {
         history_title: "Transfer History",
         no_history: "No transfers yet.",
         clear_history: "Clear History",
-        confirm_leave: "Transfer in progress. Are you sure you want to leave?"
+        confirm_leave: "Transfer in progress. Are you sure you want to leave?",
+        copy_link_btn: "Copy Magic Link"
     },
     es: {
         tab_send: "Enviar",
@@ -44,7 +45,8 @@ const translations = {
         history_title: "Historial de Transferencias",
         no_history: "No hay transferencias.",
         clear_history: "Borrar Historial",
-        confirm_leave: "Transferencia en curso. ¿Seguro que quieres salir?"
+        confirm_leave: "Transferencia en curso. ¿Seguro que quieres salir?",
+        copy_link_btn: "Copiar Enlace Mágico"
     }
 };
 
@@ -80,6 +82,7 @@ const els = {
     timerDisplay: document.getElementById('timer'),
     sendStatus: document.getElementById('send-status'),
     cancelSendBtn: document.getElementById('cancel-send-btn'),
+    copyLinkBtn: document.getElementById('copy-link-btn'),
 
     // Sender Progress
     senderProgressContainer: document.getElementById('sender-progress-container'),
@@ -490,6 +493,22 @@ els.copyCodeBtn.addEventListener('click', () => {
         alert('Clipboard access denied');
     });
 });
+
+if (els.copyLinkBtn) {
+    els.copyLinkBtn.addEventListener('click', () => {
+        const code = els.generatedCode.textContent.replace(/\s/g, '');
+        const link = `${window.location.origin}${window.location.pathname}?code=${code}`;
+
+        navigator.clipboard.writeText(link).then(() => {
+            const originalHTML = els.copyLinkBtn.innerHTML;
+            els.copyLinkBtn.innerHTML = '<i class="fa-solid fa-check"></i> ' + (currentLang === 'en' ? 'Copied!' : '¡Copiado!');
+            setTimeout(() => els.copyLinkBtn.innerHTML = originalHTML, 2000);
+        }).catch(err => {
+            console.error('Failed to copy: ', err);
+            alert('Clipboard access denied');
+        });
+    });
+}
 
 // --- RECEIVE FLOW ---
 function initReceiver() {
