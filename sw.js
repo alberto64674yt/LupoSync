@@ -1,4 +1,4 @@
-const CACHE_NAME = 'luposync-v2';
+const CACHE_NAME = 'luposync-v3';
 const ASSETS = [
     './',
     './index.html',
@@ -36,3 +36,4 @@ self.addEventListener('fetch', (e) => {
         caches.match(e.request).then((response) => response || fetch(e.request))
     );
 });
+
